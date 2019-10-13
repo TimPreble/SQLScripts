@@ -1,0 +1,27 @@
+--Testing Variables--
+--Using INTs (ISO, 112 Style Date) for Business specific Needs.
+DECLARE @StartDate INT = 0
+DECLARE @EndDate INT = 0
+
+BEGIN
+	--Create BPCS/ISO(112) Style Date
+	SELECT @StartDate = CONVERT(VARCHAR(4),YEAR(@x)) + right('00' + convert(varchar(2),month(@x)),2) + '01'  
+
+	--Figure out yesterday's date.
+	DECLARE @NextMonth Date = DATEADD(MONTH, 1, @x) --Get the 1st of Next Month
+	DECLARE @Yesterday Date = GetDate()-1 --Get Yesterday's Actual Date
+	--SELECT 'Yesterday: ' + CONVERT(VARCHAR, @Yesterday,112), 'DW: ' + CONVERT(VARCHAR, DATEPART(dw, @Yesterday))
+
+	IF @Yesterday>=@NextMonth --Any Date that equals to or is greater than 1st of next Month return the last date of the previous (Current Reporting) Month.
+		SELECT @EndDate=CONVERT(VARCHAR,DATEADD(day,-1,@NextMonth),112) --Get the end of the month: Hard Set, don't worry about Weekends.
+	ELSE
+		BEGIN 
+			SELECT @EndDate = CASE DATEPART(dw, @Yesterday) --Sunday is 1, Saturday = 7 (Default: United States, Sunday is the first day of the week)
+				WHEN 1 THEN	CONVERT(VARCHAR,DATEADD(day, -2, @Yesterday),112)--Sunday Go back 2 days
+				WHEN 7 THEN CONVERT(VARCHAR, DATEADD(day, -1, @Yesterday), 112)--Saturday Go Back 1 Day
+				ELSE CONVERT(VARCHAR, @yesterday, 112)
+			END
+		END
+END;
+
+SELECT @StartDate, @EndDate

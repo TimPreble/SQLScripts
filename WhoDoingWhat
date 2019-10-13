@@ -1,0 +1,67 @@
+/*
+Author:		Adam Machanic
+Website:	http://dataeducation.com/a-gift-of-script-for-2008-whos-active-what-are-they-doing-and-who-is-blocked/
+Short:		Who’s Active, What Are They Doing, and Who is Blocked?
+
+*/
+
+SELECT
+    x.session_id,
+    x.host_name,
+    x.login_name,
+    x.start_time,
+    x.totalReads,
+    x.totalWrites,
+    x.totalCPU,
+    x.writes_in_tempdb,
+    (
+        SELECT 
+            text AS [text()]
+        FROM sys.dm_exec_sql_text(x.sql_handle)
+        FOR XML PATH(''), TYPE
+    ) AS sql_text,
+    COALESCE(x.blocking_session_id, 0) AS blocking_session_id,
+    (
+        SELECT 
+            p.text
+        FROM 
+        (
+            SELECT 
+                MIN(sql_handle) AS sql_handle
+            FROM sys.dm_exec_requests r2
+            WHERE 
+                r2.session_id = x.blocking_session_id
+        ) AS r_blocking
+        CROSS APPLY
+        (
+            SELECT 
+                text AS [text()]
+            FROM sys.dm_exec_sql_text(r_blocking.sql_handle)
+            FOR XML PATH(''), TYPE
+        ) p (text)
+    ) AS blocking_text
+FROM
+(
+    SELECT
+        r.session_id,
+        s.host_name,
+        s.login_name,
+        r.start_time,
+        r.sql_handle,
+        r.blocking_session_id,
+        SUM(r.reads) AS totalReads,
+        SUM(r.writes) AS totalWrites,
+        SUM(r.cpu_time) AS totalCPU,
+        SUM(tsu.user_objects_alloc_page_count + tsu.internal_objects_alloc_page_count) AS writes_in_tempdb
+    FROM sys.dm_exec_requests r
+    JOIN sys.dm_exec_sessions s ON s.session_id = r.session_id
+    JOIN sys.dm_db_task_space_usage tsu ON s.session_id = tsu.session_id and r.request_id = tsu.request_id
+    WHERE r.status IN ('running', 'runnable', 'suspended')
+    GROUP BY
+        r.session_id,
+        s.host_name,
+        s.login_name,
+        r.start_time,
+        r.sql_handle,
+        r.blocking_session_id
+) x

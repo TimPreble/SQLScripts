@@ -1,0 +1,60 @@
+USE tempdb;
+GO
+
+DECLARE @dbx1 VARCHAR(MAX);
+DECLARE @use VARCHAR(MAX);
+
+IF OBJECT_ID('tempdb..##db_Results') IS NOT NULL DROP TABLE ##db_Results;
+CREATE TABLE ##db_Results
+	(
+		  [Instance]	VARCHAR(MAX) NULL
+		, [Database]	VARCHAR(MAX) NULL
+		, [SCHEMA]	VARCHAR(10) NULL
+		, [Table]	VARCHAR(MAX) NULL
+		, [INDEX]	VARCHAR(MAX) NULL
+		, [index_id]	INT NULL
+		, [Index_type_desc]	VARCHAR(MAX) NULL
+		, [avg_fragmentation_in_percent]	VARCHAR(MAX) NULL
+		, [avg_page_space_used_in_percent]	VARCHAR(MAX) NULL
+		, [IndexSizeKB] INT NULL
+		, [page_count] INT NULL
+		, [REBUILD_IDX] VARCHAR(MAX) NULL
+	)
+
+IF OBJECT_ID('tempdb..##db') IS NOT NULL DROP TABLE ##db;
+SELECT database_id, [name], 0 AS Processed INTO ##db FROM SYS.DATABASES WHERE name NOT IN ('master','model','msdb','tempdb') AND state = 0 ORDER BY [Name];
+While (Select Count(*) From ##db Where Processed = 0) > 0
+	Begin
+		Select Top 1 @dbx1 = [name] From ##db Where Processed = 0
+		PRINT @dbx1;
+		SET @Use = N'INSERT INTO ##db_Results (REBUILD_IDX) VALUES (''USE [' + @dbx1 + '];'')';
+		
+		
+
+		DECLARE @dbx sysname =@dbx1;
+		DECLARE @execx nvarchar(max) = QUOTENAME(@dbx) + N'.sys.sp_executesql',
+				@sqlx nvarchar(MAX) = N'INSERT INTO ##db_Results '
+					+ ' SELECT @@SERVERNAME as Instance, DB_NAME() as [Database], dbschemas.[name] as [Schema], dbtables.[name] as [Table] '
+					+ ' , dbindexes.[name] as [Index],indexstats.index_id,Index_type_desc '
+					+ ' , indexstats.avg_fragmentation_in_percent ,indexstats.avg_page_space_used_in_percent, SUM(s.[used_page_count]) * 8 AS IndexSizeKB,indexstats.page_count '
+--					+ ' , ''ALTER INDEX ['' + dbindexes.[name] + ''] ON [''+ dbtables.[name] +''] REBUILD;'' as REBUILD_IDX '
+					+ ' , ''ALTER INDEX ['' + dbindexes.[name] + ''] ON [''+ dbschemas.[name] +''].['' + dbtables.[name] + ''] REBUILD; --Pages: '' + convert(varchar,indexstats.page_count) + '' / '' + (CONVERT(VARCHAR,(SUM(s.[used_page_count]) * 8)/1000)) + '' mb''  as REBUILD_IDX'
+					+ ' FROM sys.dm_db_index_physical_stats (DB_ID(), NULL, NULL, NULL, ''SAMPLED'') AS indexstats '
+					+ ' 	INNER JOIN sys.tables dbtables on dbtables.[object_id] = indexstats.[object_id] '
+					+ ' 	INNER JOIN sys.schemas dbschemas on dbtables.[schema_id] = dbschemas.[schema_id] '
+					+ ' 	INNER JOIN sys.indexes AS dbindexes ON dbindexes.[object_id] = indexstats.[object_id] AND indexstats.index_id = dbindexes.index_id '
+					+ '		inner join sys.dm_db_partition_stats s on s.index_id = dbindexes.index_id and s.object_id = dbindexes.object_id '
+					+ ' WHERE indexstats.database_id = DB_ID() AND indexstats.avg_fragmentation_in_percent >= 5 AND page_count> 100 '
+					+ ' AND OBJECTPROPERTY(indexstats.[object_id], ''IsUserTable'') = 1'
+					+ ' GROUP BY dbschemas.name,dbtables.[name],dbindexes.[name],indexstats.index_id,Index_type_desc '
+					+ ' , indexstats.avg_fragmentation_in_percent ,indexstats.avg_page_space_used_in_percent, indexstats.page_count'
+					+ ' ORDER BY indexstats.avg_fragmentation_in_percent DESC'
+		    
+		EXEC (@use)
+		EXEC @execx @sqlx;
+		Update ##db Set Processed = 1 WHERE [name] = @dbx
+	END
+DROP TABLE ##db;
+SELECT * FROM ##db_Results
+WHERE REBUILD_IDX IN (SELECT DISTINCT 'USE [' + [Database] +'];' FROM ##db_Results WHERE ISNULL([Database],'') !='')
+	OR REBUILD_IDX like '%ALTER%'

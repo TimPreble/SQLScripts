@@ -1,0 +1,57 @@
+--Note this can be run against multi. servers at once.  Will provide server name as the 1st column.
+--Export to excel to be able to sort.
+
+;WITH cte_mf AS
+	( 
+		SELECT database_id, type_desc,sum([size] * 8/1024) sizemb
+		FROM sys.master_files 
+		GROUP BY database_id, type_desc
+	),
+cte_dbBackup as
+	(
+		SELECT d.database_id,backupset.database_name, 
+		MAX(backupset.backup_start_date) AS backup_start_date, 
+		MAX(backupset.backup_finish_date) AS backup_finish_date, 
+		CASE backupset.type 
+		WHEN 'D' THEN 'Database' 
+		WHEN 'L' THEN 'Log' 
+		ELSE ''
+		END AS backup_type 
+		FROM msdb.dbo.backupmediafamily 
+			INNER JOIN msdb.dbo.backupset ON msdb.dbo.backupmediafamily.media_set_id = msdb.dbo.backupset.media_set_id 
+			LEFT OUTER JOIN sys.databases d ON msdb.dbo.backupset.database_name = d.name
+		WHERE --(CONVERT(datetime, msdb.dbo.backupset.backup_start_date, 102) >= GETDATE() - 1) AND 
+		backupset.type IN ('D')
+		GROUP BY d.database_id,backupset.database_name, 
+		CASE backupset.type WHEN 'D' THEN 'Database' WHEN 'L' THEN 'Log' ELSE '' END
+	),
+cte_logBackup AS
+	(
+		SELECT d.database_id,backupset.database_name, 
+		MAX(backupset.backup_start_date) AS backup_start_date, 
+		MAX(backupset.backup_finish_date) AS backup_finish_date, 
+		CASE backupset.type 
+		WHEN 'D' THEN 'Database' 
+		WHEN 'L' THEN 'Log' 
+		ELSE ''
+		END AS backup_type 
+		FROM msdb.dbo.backupmediafamily 
+			INNER JOIN msdb.dbo.backupset ON msdb.dbo.backupmediafamily.media_set_id = msdb.dbo.backupset.media_set_id 
+			LEFT OUTER JOIN sys.databases d ON msdb.dbo.backupset.database_name = d.name
+		WHERE --(CONVERT(datetime, msdb.dbo.backupset.backup_start_date, 102) >= GETDATE() - 1) AND 
+		backupset.type IN ('L')
+		GROUP BY d.database_id,backupset.database_name, 
+		CASE backupset.type WHEN 'D' THEN 'Database' WHEN 'L' THEN 'Log' ELSE '' END
+	)
+
+select a.database_id, [Name],  state_desc,recovery_model, recovery_model_desc,b.sizemb as DataSize,c.sizemb as LogSize, SUM(b.sizemb+c.sizemb) as [TotalDBSize (MB)]
+,db.backup_finish_date AS db_backup_finish_dte,l0g.backup_finish_date AS log_backup_finish_dte
+--INTO #_Report
+FROM sys.databases a
+	LEFT OUTER JOIN cte_mf b on a.database_id = b.database_id AND b.type_desc='ROWS'
+	LEFT OUTER JOIN cte_mf c on a.database_id = c.database_id AND c.type_desc = 'LOG'
+	LEFT OUTER JOIN cte_dbBackup db ON a.database_id = db.database_id
+	LEFT OUTER JOIN cte_logBackup l0g ON a.database_id = l0g.database_id
+--WHERE recovery_model_desc NOT IN ('SIMPLE')
+GROUP BY a.database_id, [Name],state_desc,  recovery_model, recovery_model_desc,b.sizemb,c.sizemb,db.backup_finish_date,l0g.backup_finish_date 
+ORDER BY [Name]

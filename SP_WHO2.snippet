@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>SP_WHO2 Replacement</Title>
+      <Description>Filterable Query Version of SP_WHO2</Description>
+      <Author> Timothy M. Preble</Author>
+      <Shortcut></Shortcut>
+      <HelpUrl></HelpUrl>
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Code Language="SQL">
+        <![CDATA[
+SELECT  spid,
+        sp.[status],
+        loginame [Login],
+        hostname, 
+        blocked BlkBy,
+        sd.name DBName, 
+        cmd Command,
+        cpu CPUTime,
+        physical_io DiskIO,
+        last_batch LastBatch,
+        [program_name] ProgramName   
+FROM master.dbo.sysprocesses sp 
+JOIN master.dbo.sysdatabases sd ON sp.dbid = sd.dbid
+ORDER BY spid 
+
+        ]]>
+      </Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>

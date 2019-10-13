@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<CodeSnippets xmlns="http://schemas.microsoft.com/VisualStudio/2005/CodeSnippet">
+  <CodeSnippet Format="1.0.0">
+    <Header>
+      <Title>Search_SP_View</Title>
+      <Description>Search Through Stored Procedures and Views for a Specified String</Description>
+      <Author> Timothy M. Preble</Author>
+      <HelpUrl>http://blogs.msdn.com/b/kenobonn/archive/2013/05/15/code-snippets-in-sql-server-2012-for-greater-team-productivity.aspx</HelpUrl>
+      <SnippetTypes>
+        <SnippetType>Expansion</SnippetType>
+      </SnippetTypes>
+    </Header>
+    <Snippet>
+      <Declarations>
+        <Literal>
+          <ID>SearchVar</ID>
+          <ToolTip>Enter your search variable</ToolTip>
+          <Default>C1</Default>
+        </Literal>
+      </Declarations>
+      <Code Language="SQL">
+        <![CDATA[
+  DECLARE @searchtxt varchar(100)
+  SET @searchtxt = '%'+'$SearchVar$'+'%'
+   
+   --Search through Stored Procedures
+   SELECT Distinct SO.Name
+   FROM sysobjects SO (NOLOCK)
+   INNER JOIN syscomments SC (NOLOCK) on SO.Id = SC.ID
+   AND SO.Type = 'P'
+   AND (SC.Text LIKE @searchtxt)
+   ORDER BY SO.Name
+
+   --Search Through Views
+   SELECT Distinct SO.Name
+   FROM sysobjects SO (NOLOCK)
+   INNER JOIN syscomments SC (NOLOCK) on SO.Id = SC.ID
+   AND SO.Type = 'V'
+   AND (SC.Text LIKE @searchtxt)
+   ORDER BY SO.Name
+        ]]>
+      </Code>
+    </Snippet>
+  </CodeSnippet>
+</CodeSnippets>

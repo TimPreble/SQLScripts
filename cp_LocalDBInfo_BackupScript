@@ -1,0 +1,27 @@
+/*
+https://docs.microsoft.com/en-us/sql/t-sql/statements/backup-transact-sql?view=sql-server-2017
+INIT - Specifies that all backup sets should be overwritten, but preserves the media header. If INIT is specified, any existing backup set on that device is overwritten, if conditions permit.
+SKIP(With Init) - If the volume contains a valid2 media header, overwrites any backup sets on the media, preserving only the media header.
+NOFORMAT - Specifies that the backup operation preserves the existing media header and backup sets on the media volumes used for this backup operation. This is the default behavior.
+REWIND - Specifies that SQL Server releases and rewinds the tape. REWIND is the default.
+NOUNLOAD - Specifies that after the BACKUP operation the tape remains loaded on the tape drive.
+COMPRESSION - Explicitly enables backup compression.
+STATS - Displays a message each time another percentage completes
+*/
+
+with cte_mf AS
+( 
+	SELECT database_id, type_desc,sum([size] * 8/1024) sizemb
+	FROM sys.master_files
+	GROUP BY database_id, type_desc
+)
+
+select a.database_id, [Name],  recovery_model, recovery_model_desc,b.sizemb as DataSize,c.sizemb as LogSize, SUM(b.sizemb+c.sizemb) as [TotalDBSize (MB)],
+'BACKUP DATABASE ['+[Name]+'] TO  DISK = N''R:\BACKUP\'+ [Name]+'.bak'' WITH NOFORMAT, INIT,  NAME = N'''+[Name]+''', SKIP, REWIND, NOUNLOAD, COMPRESSION,  STATS = 10' as DB_TSQL_TEXT,
+'BACKUP LOG ['+[Name]+'] TO  DISK = N''R:\BACKUP\'+ [Name]+'.trn'' WITH NOFORMAT, INIT,  NAME = N'''+[Name]+''', SKIP, REWIND, NOUNLOAD, COMPRESSION,  STATS = 10' as LOG_TSQL_TEXT
+from sys.databases a
+LEFT OUTER JOIN cte_mf b on a.database_id = b.database_id AND b.type_desc='ROWS'
+LEFT OUTER JOIN cte_mf c on a.database_id = c.database_id AND c.type_desc = 'LOG'
+WHERE recovery_model_desc NOT IN ('SIMPLE')
+GROUP BY a.database_id, [Name],  recovery_model, recovery_model_desc,b.sizemb,c.sizemb
+ORDER BY [Name]

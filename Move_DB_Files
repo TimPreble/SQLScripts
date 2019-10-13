@@ -1,0 +1,36 @@
+--Credit: https://www.sqlshack.com/move-sql-database-files-mdf-ldf-another-location/
+
+--Get Physical Files for the DB you want to move.
+SELECT name, physical_name AS OriginalLocation, state_desc AS OnlineStatus
+FROM sys.master_files  
+WHERE database_id = DB_ID(N'DBName')  
+GO
+
+--see who's connected.  Ask them to disconnect .... 
+sp_who2; -- I suggest using the sp_WHO2 in the SQLScripts folder so you can filter on DB.
+
+
+ALTER DATABASE [DBName]
+    MODIFY FILE ( NAME = NextGen_LOB_1,   
+                  FILENAME = N'C:\Folder\FileName.ndf');  
+GO
+
+--Run the following SQL script to take a SQL database offline:
+--This will force everyone out & take the db off line.
+USE master
+GO
+ALTER DATABASE [DBName]
+SET OFFLINE WITH ROLLBACK IMMEDIATE
+GO
+
+--MOVE MDF and LDF files of the specific SQL database to a new location specified in the statement above. 
+--This means to simply cut mentioned files from the existing location and to move them to a newly specified one.
+
+--verify new location
+SELECT name, physical_name AS NewLocation, state_desc AS OnlineStatus
+FROM sys.master_files  
+WHERE database_id = DB_ID(N'DBName')  
+GO
+
+ALTER DATABASE [DBName] SET ONLINE;  
+GO

@@ -1,0 +1,12 @@
+DECLARE @FileName varchar(50) = CONVERT(VARCHAR,GetDate(),112) + '_FILENAME.csv'
+DECLARE @Subject Varchar(50) = @@ServerName + ': SUBJECT HERE'
+declare @tab char(1) = CHAR(9);
+
+EXEC msdb.dbo.sp_send_dbmail  
+	@profile_name = 'outlook',  
+	@recipients = 'EMAIL@Server.domain',  
+	@query = 'SELECT * FROM Server.dbo.[Table]' ,  
+	@subject = @Subject,
+	@attach_query_result_as_file = 1, 
+	@query_attachment_filename= @FileName,
+	@query_result_separator=@tab
